@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajivika Finance Limited - Debt Matrix Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+
+    <nav class="bg-slate-950 text-white px-6 py-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-emerald-500 text-slate-950 px-2.5 py-1 rounded font-bold text-sm">AFL</div>
+            <h1 class="text-lg font-bold tracking-tight">Debt Matrix Engine</h1>
+        </div>
+        <div id="liveClock" class="text-xs text-emerald-400 font-mono bg-emerald-950/50 px-3 py-1.5 rounded border border-emerald-800/60 shadow-inner tracking-wider">
+			Loading Engine Time...
+		</div>
+    </nav>
+
+    <main class="max-w-[95%] mx-auto py-6 space-y-6 flex-grow">
+        
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                <h2 class="font-bold text-gray-900 flex items-center text-base">
+                    <span class="w-1.5 h-4 bg-emerald-500 rounded mr-2"></span> Ingest Master Format
+                </h2>
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Lender Name</label>
+                    <input type="text" id="lenderName" placeholder="Must match B4 exactly if left blank" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <div class="border border-dashed border-gray-300 rounded p-4 text-center bg-gray-50 relative hover:bg-gray-100 transition">
+                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="absolute inset-0 opacity-0 cursor-pointer">
+                    <span id="fileNameDisplay" class="text-xs text-gray-600 font-semibold block truncate">Click to load Master Excel Sheet</span>
+                </div>
+
+                <button onclick="processUpload()" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 px-3 rounded transition uppercase tracking-wider">
+                    Load Into Permanent Memory
+                </button>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                <div>
+                    <h2 class="font-bold text-gray-900 flex items-center text-base mb-1">
+                        <span class="w-1.5 h-4 bg-emerald-500 rounded mr-2"></span> Operational Cash Allocation
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-4">Set target month limits to evaluate combined payouts and check execution statuses.</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Start Evaluation Date</label>
+                            <input type="date" id="startDate" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">End Evaluation Date</label>
+                            <input type="date" id="endDate" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex space-x-3 mt-4">
+                    <button onclick="filterSchedules()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded transition tracking-wider uppercase text-center shadow-sm">
+                        Query Timeline
+                    </button>
+                    <button onclick="exportFilteredToExcel()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-xs py-2.5 px-4 rounded transition">
+                        Export Matches
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                <div>
+                    <h2 class="font-bold text-gray-900 flex items-center text-base mb-1">
+                        <span class="w-1.5 h-4 bg-rose-500 rounded mr-2"></span> Active Loan Portfolios
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-2">Wipe fully paid or expired portfolios out of system memory entirely.</p>
+                    
+                    <div id="portfolioControlList" class="max-h-[120px] overflow-y-auto space-y-2 pr-1 divide-y divide-gray-50">
+                        <span class="text-xs text-gray-400 italic">No portfolios currently active inside browser memory.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 text-white p-4 rounded-xl">
+                <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Portfolio Count</div>
+                <div id="statTotalLoans" class="text-xl font-bold mt-0.5">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Pending Dues In Window</div>
+                <div id="statFilteredCount" class="text-xl font-bold text-gray-900 mt-0.5">0 rows</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Target TDS Accrual</div>
+                <div id="statFilteredTds" class="text-xl font-bold text-amber-600 mt-0.5">₹0.00</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Net Cash Outflow Pending</div>
+                <div id="statFilteredOutflow" class="text-xl font-extrabold text-emerald-600 mt-0.5">₹0.00</div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Comprehensive Cross-Loan Amortization Timeline</h3>
+                <span class="text-[11px] text-gray-400 font-medium">Click execution pill to toggle "Paid" status</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-slate-100 text-[10px] font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200">
+                            <th class="py-3 px-4 text-center">Status</th>
+                            <th class="py-3 px-4">Lender Organization</th>
+                            <th class="py-3 px-4 text-center">Total Installs Specified</th>
+                            <th class="py-3 px-4 text-center">Inst No. Due Next Month</th>
+                            <th class="py-3 px-4 text-center">Installs Remaining After</th>
+                            <th class="py-3 px-4 text-right">Target TDS Deducted</th>
+                            <th class="py-3 px-4 text-right">Loan Origin BPI</th>
+                            <th class="py-3 px-4 text-right bg-emerald-50/50 text-emerald-950">Net Payout of Month</th>
+                            <th class="py-3 px-4 text-center">Due Date Target</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleTableBody" class="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
+                        <tr>
+                            <td colspan="9" class="py-10 text-center text-gray-400">
+                                Storage pipeline empty. Ingest standard master spreadsheet files to initiate database coordinates.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-950 text-slate-400 border-t border-slate-800 mt-12">
+        <div class="max-w-[95%] mx-auto py-10 grid grid-cols-1 md:grid-cols-4 gap-8">
+            
+            <div class="space-y-3">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-emerald-500 text-slate-950 font-extrabold text-xs px-2 py-0.5 rounded">AFL</div>
+                    <span class="text-white font-bold tracking-tight text-base">Ajivika Finance Limited</span>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Ajivika Finance creates value for the bottom-of-pyramid population through timely delivery of vital micro-credits at the doorstep of low-income households, unserved by banks and other Financial Institutions.
+                </p>
+            </div>
+
+            <div class="space-y-2.5">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-1.5">Corporate Office</h4>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                    B-84, B Block, Sector 64, Noida<br>Uttar Pradesh, 201309, India
+                </p>
+                <div class="text-[11px] font-mono space-y-1 pt-1">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-emerald-400">✉</span>
+                        <a href="mailto:info@ajivikafinance.in" class="hover:text-white transition">info@ajivikafinance.in</a>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-emerald-400">🌐</span>
+                        <a href="https://www.ajivikafinance.in/" class="hover:text-white transition">www.ajivikafinance.in</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2.5">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-1.5">Security Claims</h4>
+                <div class="text-[11px] text-slate-400 space-y-2 leading-relaxed">
+                    <p class="flex items-start">
+                        <span class="text-emerald-500 mr-1.5">✔</span>
+                        <span><strong>Zero-Knowledge Storage:</strong> Data stays sandboxed on your machine's isolated hard drive via secure localStorage boundaries.</span>
+                    </p>
+                    <p class="flex items-start">
+                        <span class="text-emerald-500 mr-1.5">✔</span>
+                        <span><strong>No Network Cloud Relays:</strong> Spreadsheet calculations and data ingestion execute 100% locally to prevent corporate tracking leakage.</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="space-y-2.5">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-1.5">Geo-Location Portal</h4>
+                <div class="group relative bg-slate-900 border border-slate-800 rounded-lg p-3 hover:border-emerald-500 transition duration-300 flex items-center justify-between shadow-inner">
+                    <div class="space-y-1">
+                        <span class="text-xs text-slate-200 font-bold block">Ajivika Finance Limited</span>
+                        <span class="text-[10px] text-slate-500 font-medium block">Click to map physical coordinates</span>
+                    </div>
+                    
+                    <a href="https://www.google.com/maps/place/Ajivika+Finance+Limited/@28.6124085,77.3754227,17z/data=!3m1!4b1!4m6!3m5!1s0x390cef50b752e6af:0xb33fa43a3eb74628!8m2!3d28.6124085!4d77.3779976!16s%2Fg%2F11st682_sc?entry=ttu&g_ep=EgoyMDI2MDUyMC4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noopener noreferrer" 
+                       class="bg-slate-800 group-hover:bg-emerald-500 text-slate-400 group-hover:text-slate-950 p-2.5 rounded-lg transition-all duration-300 shadow flex items-center justify-center border border-slate-700 group-hover:border-emerald-400"
+                       title="Navigate via Google Maps">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-950 border-t border-slate-900 py-4 text-center text-[11px] text-slate-500 font-mono tracking-wide">
+            <div>&copy; <span id="currentYear">2026</span> AFL . All Corporate Rights Reserved. Designed & Developed By : <a href="https://spicentech.github.io/spicentech/" style="text-decoration: none; color: #ff5733">SPICEN TECHNOLOGIES, NOIDA</a></div>
+        </div>
+    </footer>
+
+    <script>
+        const STORAGE_KEY = "SPICEN_DEBT_MATRIX_DATA";
+        let systemMasterDatabase = [];
+
+		
+        // Application Initialization Lifecycle
+        window.addEventListener('DOMContentLoaded', () => {
+    loadDatabaseFromLocalStorage();
+    renderPortfolioManager();
+    
+    // START THE CLOCK ENGINE
+    initRealTimeClock();
+    
+    // Sync dynamic footer elements
+    document.getElementById('currentYear').innerText = new Date().getFullYear();
+    
+    document.getElementById('startDate').value = "2026-01-01";
+    document.getElementById('endDate').value = "2026-12-31";
+    
+    if(systemMasterDatabase.length > 0) {
+        filterSchedules();
+    }
+});
+
+        document.getElementById('excelFile').addEventListener('change', e => {
+            document.getElementById('fileNameDisplay').innerText = e.target.files[0] ? e.target.files[0].name : "Click to select file";
+        });
+
+        function saveDatabaseToLocalStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(systemMasterDatabase));
+        }
+
+        function loadDatabaseFromLocalStorage() {
+            const rawData = localStorage.getItem(STORAGE_KEY);
+            if (rawData) {
+                try {
+                    systemMasterDatabase = JSON.parse(rawData);
+                    systemMasterDatabase.forEach(row => { row.dueDate = new Date(row.dueDate); });
+                } catch(e) {
+                    systemMasterDatabase = [];
+                }
+            }
+        }
+
+        function getUniqueLenders() {
+            let lenders = new Set();
+            systemMasterDatabase.forEach(item => lenders.add(item.lender));
+            return Array.from(lenders);
+        }
+
+        function renderPortfolioManager() {
+            const listContainer = document.getElementById('portfolioControlList');
+            const lenders = getUniqueLenders();
+            document.getElementById('statTotalLoans').innerText = lenders.length;
+
+            if(lenders.length === 0) {
+                listContainer.innerHTML = `<span class="text-xs text-gray-400 italic">No portfolios active in local space.</span>`;
+                return;
+            }
+
+            listContainer.innerHTML = '';
+            lenders.forEach(lenderName => {
+                const totalRows = systemMasterDatabase.filter(d => d.lender === lenderName).length;
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center py-2 text-xs font-sans";
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold text-gray-900 block">${lenderName}</span>
+                        <span class="text-[10px] text-gray-400 font-mono">${totalRows} tracks mapped</span>
+                    </div>
+                    <button onclick="deleteLoanPortfolio('${lenderName.replace(/'/g, "\\'")}')" class="text-rose-600 hover:text-rose-800 font-bold bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition text-[11px]">
+                        Delete Account
+                    </button>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+
+        function deleteLoanPortfolio(lenderName) {
+            if(confirm(`🚨 Danger: Delete "${lenderName}" from local device?`)) {
+                systemMasterDatabase = systemMasterDatabase.filter(d => d.lender !== lenderName);
+                saveDatabaseToLocalStorage();
+                renderPortfolioManager();
+                filterSchedules();
+            }
+        }
+
+        function toggleRowStatus(uniqueUid) {
+            const matchedIndex = systemMasterDatabase.findIndex(item => item.uid === uniqueUid);
+            if(matchedIndex !== -1) {
+                const currentStatus = systemMasterDatabase[matchedIndex].status;
+                systemMasterDatabase[matchedIndex].status = (currentStatus === "Paid") ? "Pending" : "Paid";
+                saveDatabaseToLocalStorage();
+                filterSchedules();
+            }
+        }
+
+        function processUpload() {
+            const manualLenderInput = document.getElementById('lenderName').value.trim();
+            const fileInput = document.getElementById('excelFile');
+
+            if (!fileInput.files[0]) return alert("Attach the master layout spreadsheet asset first.");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const ws = workbook.Sheets[workbook.SheetNames[0]];
+                
+                let inferredLender = ws['B4'] ? String(ws['B4'].v).trim() : '';
+                let totalInstalls = ws['B5'] ? parseInt(ws['B5'].v) : 0;
+                let loanBpi = ws['B6'] ? parseFloat(ws['B6'].v) : 0;
+
+                let finalLenderName = manualLenderInput || inferredLender;
+
+                if (!finalLenderName) return alert("System Error: Lender Name unresolved.");
+                if (!totalInstalls || isNaN(totalInstalls)) return alert("System Error: Cell B5 tracking invalid.");
+
+                const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                let dateIdx = 1, instIdx = 2, netIdx = 7, tdsIdx = 6; 
+                let addedCount = 0;
+
+                systemMasterDatabase = systemMasterDatabase.filter(d => d.lender !== finalLenderName);
+
+                for (let r = 9; r < rows.length; r++) {
+                    const row = rows[r];
+                    if (!row || row.length === 0 || String(row[0]).toLowerCase().includes('total')) continue;
+
+                    let rawDate = row[dateIdx];
+                    let currentInst = parseInt(row[instIdx]);
+                    let netPay = parseFloat(row[netIdx]);
+                    let tdsAmt = parseFloat(row[tdsIdx]) || 0;
+
+                    if (!rawDate || isNaN(netPay) || isNaN(currentInst)) continue;
+
+                    let parsedDate = rawDate instanceof Date ? rawDate : new Date(rawDate);
+                    if (isNaN(parsedDate.getTime())) continue;
+
+                    let generationUid = `${finalLenderName.replace(/\s+/g, '')}_I${currentInst}_D${parsedDate.getTime()}`;
+
+                    systemMasterDatabase.push({
+                        uid: generationUid,
+                        lender: finalLenderName,
+                        totalInstalls: totalInstalls,
+                        bpi: loanBpi,
+                        installmentNum: currentInst,
+                        tds: tdsAmt,
+                        netPayout: Math.abs(netPay),
+                        dueDate: parsedDate,
+                        status: "Pending"
+                    });
+                    addedCount++;
+                }
+
+                if (addedCount > 0) {
+                    saveDatabaseToLocalStorage();
+                    renderPortfolioManager();
+                    document.getElementById('lenderName').value = '';
+                    document.getElementById('excelFile').value = '';
+                    document.getElementById('fileNameDisplay').innerText = "Click to load Master Excel Sheet";
+                    alert(`Success! Ingested ${addedCount} tracks.`);
+                    filterSchedules();
+                } else {
+                    alert("Upload error. Check sheet layout starting on Row 10.");
+                }
+            };
+            reader.readAsArrayBuffer(fileInput.files[0]);
+        }
+
+        let filteredViewData = [];
+        function filterSchedules() {
+            const startVal = document.getElementById('startDate').value;
+            const endVal = document.getElementById('endDate').value;
+
+            if (!startVal || !endVal) return;
+
+            const start = new Date(startVal); start.setHours(0,0,0,0);
+            const end = new Date(endVal); end.setHours(23,59,59,999);
+
+            filteredViewData = systemMasterDatabase.filter(d => d.dueDate >= start && d.dueDate <= end)
+                                                   .sort((a,b) => a.dueDate - b.dueDate);
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('scheduleTableBody');
+            tbody.innerHTML = '';
+            document.getElementById('statFilteredCount').innerText = `${filteredViewData.length} entries`;
+
+            if(filteredViewData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-10 text-center text-gray-400">No active parameters match search constraints.</td></tr>`;
+                document.getElementById('statFilteredOutflow').innerText = "₹0.00";
+                document.getElementById('statFilteredTds').innerText = "₹0.00";
+                return;
+            }
+
+            let totalPayoutPending = 0;
+            let totalTds = 0;
+
+            filteredViewData.forEach((row) => {
+                if(row.status !== "Paid") { totalPayoutPending += row.netPayout; }
+                totalTds += row.tds;
+
+                let leftAfterPayment = row.totalInstalls - row.installmentNum;
+                let isPaid = row.status === "Paid";
+
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-slate-50 transition font-mono ${isPaid ? 'opacity-40 line-through bg-gray-50/50' : ''}`;
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="toggleRowStatus('${row.uid}')" class="px-2.5 py-1 rounded text-[10px] font-bold font-sans tracking-wide transition uppercase ${isPaid ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : 'bg-amber-100 text-amber-800 ring-1 ring-amber-300'}">
+                            ${row.status}
+                        </button>
+                    </td>
+                    <td class="py-3 px-4 font-sans text-slate-900 font-bold">${row.lender}</td>
+                    <td class="py-3 px-4 text-center text-gray-500">${row.totalInstalls}</td>
+                    <td class="py-3 px-4 text-center font-bold text-amber-600">Inst No. ${row.installmentNum}</td>
+                    <td class="py-3 px-4 text-center text-gray-600 font-bold">${leftAfterPayment < 0 ? 0 : leftAfterPayment} left</td>
+                    <td class="py-3 px-4 text-right text-amber-700">₹${row.tds.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                    <td class="py-3 px-4 text-right text-gray-400">₹${row.bpi.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                    <td class="py-3 px-4 text-right font-extrabold text-sm ${isPaid ? 'text-gray-400' : 'text-emerald-700 bg-emerald-50/20'}">₹${row.netPayout.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                    <td class="py-3 px-4 text-center font-sans text-gray-600">${row.dueDate.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('statFilteredOutflow').innerText = `₹${totalPayoutPending.toLocaleString('en-IN', {minimumFractionDigits:2})}`;
+            document.getElementById('statFilteredTds').innerText = `₹${totalTds.toLocaleString('en-IN', {minimumFractionDigits:2})}`;
+        }
+
+        function exportFilteredToExcel() {
+            if (filteredViewData.length === 0) return alert("No evaluation targets found.");
+            const mapped = filteredViewData.map((d, idx) => ({
+                "Execution Status": d.status,
+                "Lender Organization": d.lender,
+                "Total Number of Installments": d.totalInstalls,
+                "No. of Installment Being Paid Next Month": d.installmentNum,
+                "No. of Installments Left After": d.totalInstalls - d.installmentNum,
+                "TDS Deducted": d.tds,
+                "BPI of Loan": d.bpi,
+                "Net Payout of Month": d.netPayout,
+                "Due Date": d.dueDate.toLocaleDateString('en-IN')
+            }));
+            const ws = XLSX.utils.json_to_sheet(mapped);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Executive Outflow Summary");
+            XLSX.writeFile(wb, "Treasury_Position_Report.xlsx");
+        }
+		function initRealTimeClock() {
+    const clockElement = document.getElementById('liveClock');
+    
+    function updateClock() {
+        const now = new Date();
+        
+        // Format options for clean corporate layout: DD-MMM-YYYY | HH:MM:SS
+        const dateOptions = { day: '2-digit', month: 'short', year: 'numeric' };
+        const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+        
+        const formattedDate = now.toLocaleDateString('en-IN', dateOptions).toUpperCase();
+        const formattedTime = now.toLocaleTimeString('en-IN', timeOptions);
+        
+        // Update dashboard text with an emerald heartbeat dot
+        clockElement.innerHTML = `<span class="animate-pulse text-emerald-500 mr-1.5">●</span>${formattedDate} │ ${formattedTime}`;
+    }
+    
+    // Run once immediately on launch, then loop every 1000ms (1 second)
+    updateClock();
+    setInterval(updateClock, 1000);
+}
+    </script>
+</body>
+</html>
